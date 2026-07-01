@@ -11,8 +11,8 @@ RFC3339_UTC_RE = re.compile(
     r"(\.\d+)?Z$"
 )
 
-
 async def recv_json(ws, timeout: float = 10.0) -> dict[str, Any]:
+    """Receive one WebSocket message as JSON within the given timeout."""
     async with asyncio.timeout(timeout):
         raw = await ws.recv()
 
@@ -20,13 +20,14 @@ async def recv_json(ws, timeout: float = 10.0) -> dict[str, Any]:
 
 
 async def recv_until(ws, predicate, timeout: float = 15.0) -> dict[str, Any]:
+    """Receive messages until one matches the predicate or the timeout expires."""
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
             raise TimeoutError("Timed out waiting for expected WebSocket message")
         msg = await recv_json(ws, timeout=remaining)
-        print(msg)
+
         if predicate(msg):
             return msg
 
@@ -37,6 +38,7 @@ def create_generic_subscribe_msg(
     symbol: List[str],
     req_id: int | None = None,
 ) -> dict[str, Any]:
+    """Build a Kraken WebSocket v2 subscribe request for one or more symbols."""
     msg: dict[str, Any] = {
         "method": "subscribe",
         "params": {
@@ -45,20 +47,24 @@ def create_generic_subscribe_msg(
             "snapshot": snapshot,
         },
     }
-
     if req_id is not None:
         msg["req_id"] = req_id
 
     return msg
 
 
-def create_generic_unsubscribe_msg(channel: str, symbol: List[str], req_id: int | None = None):
+def create_generic_unsubscribe_msg(
+    channel: str,
+    symbol: List[str],
+    req_id: int | None = None,
+) -> dict[str, Any]:
+    """Build a Kraken WebSocket v2 unsubscribe request for one or more symbols."""
     msg: dict[str, Any] = {
         "method": "unsubscribe",
         "params": {
             "channel": channel,
-            "symbol": symbol
-        }
+            "symbol": symbol,
+        },
     }
     if req_id is not None:
         msg["req_id"] = req_id
@@ -66,13 +72,14 @@ def create_generic_unsubscribe_msg(channel: str, symbol: List[str], req_id: int 
     return msg
 
 
-def assert_number(value: Any, field_name: str, unsigned: bool) -> None:
+def assert_number(value: Any, unsigned: bool) -> None:
+    """Assert that a value is numeric and optionally non-negative."""
     assert isinstance(value, int | float | Decimal), (
-        f"{field_name} must be a number, got {type(value).__name__}: {value!r}"
+        f"Field must be a number, got {type(value).__name__}: {value!r}"
     )
-
+    assert not isinstance(value, bool), "Field must be a number, got bool"
     if unsigned:
-        assert value >= 0
+        assert value >= 0, f"Field must be non-negative, got {value!r}"
 
 
 def assert_generic_subscribe_unsubscribe_response(
@@ -83,6 +90,7 @@ def assert_generic_subscribe_unsubscribe_response(
     req_id: Optional[int],
     unsubscribe: bool = False,
 ) -> None:
+    """Assert a successful Kraken subscribe or unsubscribe response."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {
@@ -95,7 +103,8 @@ def assert_generic_subscribe_unsubscribe_response(
     missing = required_top_level_keys - msg.keys()
     assert not missing, f"missing top-level keys: {sorted(missing)}"
 
-    assert msg["method"] == "subscribe" if not unsubscribe else "unsubscribe"
+    expected_method = "unsubscribe" if unsubscribe else "subscribe"
+    assert msg["method"] == expected_method
     assert msg["success"] is True
 
     assert isinstance(msg["time_in"], str)

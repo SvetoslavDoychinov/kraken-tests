@@ -8,10 +8,12 @@ from websockets import InvalidStatus
 
 @pytest.fixture
 def ws_url_v2():
+    """Return the public Kraken WebSocket v2 endpoint."""
     yield "wss://ws.kraken.com/v2"
 
 
 async def connect_with_retry(url: str, attempts: int = 5):
+    """Open a WebSocket connection, retrying with backoff on Kraken HTTP 429 rate limits."""
     last_error = None
 
     for attempt in range(attempts):
@@ -29,6 +31,7 @@ async def connect_with_retry(url: str, attempts: int = 5):
 
 @pytest_asyncio.fixture
 async def kraken_ws(ws_url_v2):
+    """Yield an open Kraken WebSocket connection and close it after the test."""
     ws = await connect_with_retry(ws_url_v2)
 
     try:

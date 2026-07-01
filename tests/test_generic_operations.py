@@ -8,6 +8,7 @@ from tests.helpers import create_generic_subscribe_msg, recv_until, assert_gener
 
 
 def assert_heartbeat_message(msg: dict[str, Any]) -> None:
+    """Assert that a message is a valid Kraken heartbeat."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {"channel"}
@@ -18,6 +19,7 @@ def assert_heartbeat_message(msg: dict[str, Any]) -> None:
 
 
 def assert_status_message(msg: dict[str, Any]) -> None:
+    """Assert that a message is a valid Kraken status update."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {
@@ -67,6 +69,7 @@ def assert_status_message(msg: dict[str, Any]) -> None:
 
 @pytest.mark.asyncio
 async def test_status_message_received_after_connection(kraken_ws) -> None:
+    """Verify that Kraken sends a status message after the WebSocket connects."""
     status_message = await recv_until(
         kraken_ws,
         lambda msg: msg.get("channel") == "status",
@@ -76,7 +79,7 @@ async def test_status_message_received_after_connection(kraken_ws) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("req_id", [33, 77, None])
+@pytest.mark.parametrize("req_id", [33, None])
 @pytest.mark.parametrize("symbol", [["BTC/USD", "ETH/USD"], ["ETH/USD"]])
 @pytest.mark.parametrize("channel", ["ticker", "trade"])
 async def test_generic_subscribe_unsubscribe(
@@ -85,6 +88,7 @@ async def test_generic_subscribe_unsubscribe(
         symbol: List[str],
         channel: str
 ) -> None:
+    """Verify subscribe and unsubscribe responses for generic public channels."""
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -120,10 +124,8 @@ async def test_generic_subscribe_unsubscribe(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("channel", ["ticker", "trade"])
-async def test_heartbeat_sent_after_subscribe(
-        kraken_ws,
-        channel: str
-) -> None:
+async def test_heartbeat_sent_after_subscribe(kraken_ws, channel: str) -> None:
+    """Verify that a heartbeat message is received after subscribing to a channel."""
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -149,6 +151,7 @@ async def test_unsubscribe_error(
         kraken_ws,
         channel: str
 ) -> None:
+    """Verify that unsubscribing from a missing subscription returns an error."""
     symbol = "BTC/USD"
 
     await kraken_ws.send(
@@ -176,3 +179,35 @@ async def test_unsubscribe_error(
     assert RFC3339_UTC_RE.match(error_message["time_out"]), (
         f"time_out is not RFC3339 UTC format: {error_message['time_out']!r}"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("channel", ["ticker", "trade"])
+async def test_subscribe_without_snapshot_sends_no_snapshot(
+        kraken_ws,
+        channel: str
+) -> None:
+    """Verify that snapshot=False prevents initial snapshots for ticker and trade."""
+    symbol = ["BTC/USD"]
+    req_id = 333
+    await kraken_ws.send(
+        json.dumps(
+            create_generic_subscribe_msg(
+                channel=channel,
+                req_id=req_id,
+                snapshot=False,
+                symbol=symbol,
+            )
+        )
+    )
+    subscribe_message = await recv_until(kraken_ws, lambda msg: msg.get("method") == "subscribe", timeout=5.0)
+
+    assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel=channel, symbol=symbol[0],
+                                                  snapshot=False, req_id=req_id)
+    with pytest.raises(TimeoutError):
+        await recv_until(
+            ws=kraken_ws,
+            predicate=lambda msg: msg.get("type") == "snapshot" and msg.get("channel") == channel,
+            timeout=10.0
+        )
+    # Not going to assert whether I receive updates or not because real market data, therefore not sure when I can get one

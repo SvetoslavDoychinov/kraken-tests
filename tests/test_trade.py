@@ -8,6 +8,7 @@ from tests.helpers import create_generic_subscribe_msg, recv_until, assert_gener
 
 
 def assert_trade_snapshot_message(msg: dict[str, Any], symbol: str) -> None:
+    """Assert that a Kraken trade snapshot contains 50 valid trades."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {
@@ -46,19 +47,20 @@ def assert_trade_snapshot_message(msg: dict[str, Any], symbol: str) -> None:
 
         assert trade["side"] in {"buy", "sell"}
         assert trade["ord_type"] in {"market", "limit"}
-        assert_number(trade["trade_id"], "trade_id", True)
+        assert_number(trade["trade_id"], True)
         assert isinstance(trade["timestamp"], str), (
             f"timestamp must be str, got {type(trade['timestamp']).__name__}"
         )
         assert RFC3339_UTC_RE.match(trade["timestamp"]), (
             f"timestamp is not RFC3339 UTC format: {trade['timestamp']!r}"
         )
-        assert_number(trade["price"], "trade_price", True)
-        assert_number(trade["qty"], "trade_qty", True)
+        assert_number(trade["price"], True)
+        assert_number(trade["qty"], True)
 
 
 @pytest.mark.asyncio
 async def test_trade_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws) -> None:
+    """Subscribe to the trade channel and validate the returned snapshot."""
     symbol = ["BTC/USD"]
     req_id = 13
     await kraken_ws.send(

@@ -15,6 +15,7 @@ def create_book_subscribe_msg(
     depth: int,
     req_id: int | None = None,
 ) -> dict[str, Any]:
+    """Build a Kraken book subscribe request with a chosen depth."""
     msg: dict[str, Any] = {
         "method": "subscribe",
         "params": {
@@ -31,6 +32,7 @@ def create_book_subscribe_msg(
 
 
 def assert_book_side_level(level: dict[str, Any], side: str) -> None:
+    """Assert that one book bid or ask level has valid price and quantity fields."""
     assert isinstance(level, dict), (
         f"{side} level must be dict, got {type(level).__name__}"
     )
@@ -39,8 +41,8 @@ def assert_book_side_level(level: dict[str, Any], side: str) -> None:
     missing = required_level_keys - level.keys()
     assert not missing, f"missing {side} level keys: {sorted(missing)}"
 
-    assert_number(level["price"], f"{side}.price", True)
-    assert_number(level["qty"], f"{side}.qty", True)
+    assert_number(level["price"], True)
+    assert_number(level["qty"], True)
 
 
 def assert_book_snapshot_message(
@@ -49,8 +51,8 @@ def assert_book_snapshot_message(
     symbols: List[str],
     depth: int,
 ) -> None:
+    """Assert that a Kraken book snapshot has valid schema, depth, ordering, and spread."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
-
     required_top_level_keys = {
         "channel",
         "type",
@@ -133,11 +135,13 @@ def assert_book_snapshot_message(
 
 
 def _format_checksum_number(value: int | float | str) -> str:
+    """Format a price or quantity value according to Kraken checksum rules."""
     formatted = str(value).replace(".", "").lstrip("0")
     return formatted or "0"
 
 
 def calculate_book_checksum(book_item: dict[str, Any]) -> int:
+    """Calculate the CRC32 checksum for the top 10 ask and bid levels."""
     asks = sorted(book_item["asks"], key=lambda level: level["price"])[:10]
     bids = sorted(book_item["bids"], key=lambda level: level["price"], reverse=True)[:10]
 
@@ -157,6 +161,7 @@ def calculate_book_checksum(book_item: dict[str, Any]) -> int:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("depth", [10, 25])
 async def test_book_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws, depth: int) -> None:
+    """Subscribe to the book channel and validate snapshots for each requested symbol."""
     symbol = ["BTC/USD", "ETH/USD"]
     req_id = 3
 
@@ -208,6 +213,7 @@ async def test_book_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws, dept
 
 @pytest.mark.asyncio
 async def test_book_snapshot_checksum_is_valid(kraken_ws) -> None:
+    """Validate that the book snapshot checksum matches the calculated CRC32 value."""
     symbol = ["BTC/USD"]
     depth = 10
 
@@ -238,6 +244,7 @@ async def test_book_snapshot_checksum_is_valid(kraken_ws) -> None:
 
 @pytest.mark.asyncio
 async def test_book_subscribe_invalid_depth_error(kraken_ws) -> None:
+    """Verify that subscribing to the book channel with an unsupported depth fails."""
     symbol = ["BTC/USD", "ETH/USD"]
     req_id = 3
     depth = 33

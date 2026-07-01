@@ -11,8 +11,8 @@ def assert_ticker_snapshot_message(
     msg: dict[str, Any],
     symbol: str,
 ) -> None:
+    """Assert that a Kraken ticker snapshot has valid schema and top-of-book data."""
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
-
     required_top_level_keys = {
         "channel",
         "type",
@@ -82,10 +82,10 @@ def assert_ticker_snapshot_message(
     }
 
     for field in non_negative_fields:
-        assert_number(ticker[field], field, True)
+        assert_number(ticker[field], True)
 
     for field in signed_fields:
-        assert_number(ticker[field], field, False)
+        assert_number(ticker[field], False)
 
     assert ticker["bid"] < ticker["ask"], (
         f"ticker is crossed: bid={ticker['bid']} ask={ticker['ask']}"
@@ -96,10 +96,11 @@ def assert_ticker_snapshot_message(
 @pytest.mark.parametrize("req_id", [13, None])
 @pytest.mark.parametrize("symbol", [["BTC/USD"], ["ETH/USD"]])
 async def test_ticker_subscribe_with_snapshot_sends_valid_snapshot(
-    kraken_ws,
-    req_id: int,
-    symbol: List[str],
+        kraken_ws,
+        req_id: int,
+        symbol: List[str]
 ) -> None:
+    """Subscribe to the ticker channel and validate the returned snapshot."""
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -116,37 +117,3 @@ async def test_ticker_subscribe_with_snapshot_sends_valid_snapshot(
     assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel="ticker", symbol=symbol[0],
                                                   snapshot=True, req_id=req_id)
     assert_ticker_snapshot_message(msg=snapshot, symbol=symbol[0])
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("req_id", [101, 102, None])
-@pytest.mark.parametrize("symbol", [["BTC/USD"], ["ETH/USD"]])
-async def test_ticker_subscribe_without_snapshot_sends_no_snapshot(
-    kraken_ws,
-    req_id: int,
-    symbol: List[str],
-) -> None:
-    await kraken_ws.send(
-        json.dumps(
-            create_generic_subscribe_msg(
-                channel="ticker",
-                req_id=req_id,
-                snapshot=False,
-                symbol=symbol,
-            )
-        )
-    )
-    subscribe_message = await recv_until(kraken_ws, lambda msg: msg.get("method") == "subscribe", timeout=5.0)
-
-    assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel="ticker", symbol=symbol[0],
-                                                  snapshot=False, req_id=req_id)
-    with pytest.raises(TimeoutError):
-        await recv_until(
-            ws=kraken_ws,
-            predicate=lambda msg: msg.get("type") == "snapshot" and msg.get("channel") == "ticker",
-            timeout=5.0
-        )
-
-
-
-    # Not going to assert whether I receive updates or not because real market data, therefore not sure when I can get one
