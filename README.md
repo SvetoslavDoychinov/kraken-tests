@@ -47,3 +47,11 @@ docker docker run --rm kraken-ws-tests
 ```
 
 This should give you a relatively user-friendly output.
+
+
+## Repository metadata
+
+I've uploaded the entire project to GitHub and you can review all my commits there at:
+
+- Repository URL: https://github.com/SvetoslavDoychinov/kraken-tests
+- Branch: `main`
