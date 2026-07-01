@@ -4,7 +4,7 @@ from typing import Any, List
 import pytest
 
 from tests.helpers import recv_until, create_generic_subscribe_msg, assert_number, RFC3339_UTC_RE, \
-    assert_generic_subscribe_unsubscribe_response, create_generic_unsubscribe_msg
+    assert_generic_subscribe_unsubscribe_response
 
 
 def assert_ticker_snapshot_message(
