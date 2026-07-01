@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 import re
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Callable, Union
 
+
+logger = logging.getLogger(__name__)
 
 RFC3339_UTC_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T"
@@ -19,9 +22,10 @@ async def recv_json(ws, timeout: float = 10.0) -> dict[str, Any]:
     return json.loads(raw, parse_float=Decimal)
 
 
-async def recv_until(ws, predicate, timeout: float = 15.0) -> dict[str, Any]:
+async def recv_until(ws, predicate: Callable[[dict[str, Any]], bool], timeout: float = 15.0) -> dict[str, Any]:
     """Receive messages until one matches the predicate or the timeout expires."""
     deadline = asyncio.get_running_loop().time() + timeout
+    logger.debug(f"Waiting {timeout}s for matching websocket message...")
     while True:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
@@ -29,6 +33,7 @@ async def recv_until(ws, predicate, timeout: float = 15.0) -> dict[str, Any]:
         msg = await recv_json(ws, timeout=remaining)
 
         if predicate(msg):
+            logging.debug(f"Received matching message: {msg}")
             return msg
 
 
@@ -72,8 +77,9 @@ def create_generic_unsubscribe_msg(
     return msg
 
 
-def assert_number(value: Any, unsigned: bool) -> None:
+def assert_number(value: Union[int, float, Decimal], unsigned: bool) -> None:
     """Assert that a value is numeric and optionally non-negative."""
+    logger.info(f"Assert that a value is numeric and unsigned = {unsigned}")
     assert isinstance(value, int | float | Decimal), (
         f"Field must be a number, got {type(value).__name__}: {value!r}"
     )
@@ -91,6 +97,7 @@ def assert_generic_subscribe_unsubscribe_response(
     unsubscribe: bool = False,
 ) -> None:
     """Assert a successful Kraken subscribe or unsubscribe response."""
+    logger.info(f"Assert successful Kraken {'unsubscribe' if unsubscribe else 'subscribe'} response was received.")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {

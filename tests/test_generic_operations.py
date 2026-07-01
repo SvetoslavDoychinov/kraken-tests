@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, List
 
 import pytest
@@ -7,8 +8,11 @@ from tests.helpers import create_generic_subscribe_msg, recv_until, assert_gener
     create_generic_unsubscribe_msg, RFC3339_UTC_RE
 
 
+logger = logging.getLogger(__name__)
+
 def assert_heartbeat_message(msg: dict[str, Any]) -> None:
     """Assert that a message is a valid Kraken heartbeat."""
+    logger.info("Validating that valid heartbeat message was received.")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {"channel"}
@@ -20,6 +24,7 @@ def assert_heartbeat_message(msg: dict[str, Any]) -> None:
 
 def assert_status_message(msg: dict[str, Any]) -> None:
     """Assert that a message is a valid Kraken status update."""
+    logger.info("Validating that valid status message was received.")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {
@@ -89,6 +94,7 @@ async def test_generic_subscribe_unsubscribe(
         channel: str
 ) -> None:
     """Verify subscribe and unsubscribe responses for generic public channels."""
+    logger.info(f"Subscribing to {channel} for {symbol}")
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -105,7 +111,7 @@ async def test_generic_subscribe_unsubscribe(
         assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel=channel, symbol=value,
                                                       snapshot=False, req_id=req_id)
 
-
+    logger.info(f"Unsubscribing to {channel} for {symbol}")
     await kraken_ws.send(
         json.dumps(
             create_generic_unsubscribe_msg(
@@ -126,6 +132,7 @@ async def test_generic_subscribe_unsubscribe(
 @pytest.mark.parametrize("channel", ["ticker", "trade"])
 async def test_heartbeat_sent_after_subscribe(kraken_ws, channel: str) -> None:
     """Verify that a heartbeat message is received after subscribing to a channel."""
+    logger.info(f"Subscribing to {channel}")
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -153,7 +160,7 @@ async def test_unsubscribe_error(
 ) -> None:
     """Verify that unsubscribing from a missing subscription returns an error."""
     symbol = "BTC/USD"
-
+    logger.info(f"Unsubscribing from channel {channel} without having subscribed before")
     await kraken_ws.send(
         json.dumps(
             create_generic_unsubscribe_msg(
@@ -163,6 +170,7 @@ async def test_unsubscribe_error(
             )
         )
     )
+    logger.info(f"Validating that an error thrown.")
     error_message = await recv_until(kraken_ws, lambda msg: "error" in msg, timeout=5.0)
 
     assert error_message["error"] == "Subscription Not Found"
@@ -190,6 +198,7 @@ async def test_subscribe_without_snapshot_sends_no_snapshot(
     """Verify that snapshot=False prevents initial snapshots for ticker and trade."""
     symbol = ["BTC/USD"]
     req_id = 333
+    logger.info(f"Subscribing to {channel} without snapshot")
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
@@ -204,6 +213,8 @@ async def test_subscribe_without_snapshot_sends_no_snapshot(
 
     assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel=channel, symbol=symbol[0],
                                                   snapshot=False, req_id=req_id)
+
+    logger.info("Assert that no snapshot message is received.")
     with pytest.raises(TimeoutError):
         await recv_until(
             ws=kraken_ws,

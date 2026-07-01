@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -7,8 +8,11 @@ from tests.helpers import create_generic_subscribe_msg, recv_until, assert_gener
     assert_number, RFC3339_UTC_RE
 
 
+logger = logging.getLogger(__name__)
+
 def assert_trade_snapshot_message(msg: dict[str, Any], symbol: str) -> None:
     """Assert that a Kraken trade snapshot contains 50 valid trades."""
+    logger.info("Validating trade snapshot message schema")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
 
     required_top_level_keys = {
@@ -63,6 +67,7 @@ async def test_trade_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws) -> 
     """Subscribe to the trade channel and validate the returned snapshot."""
     symbol = ["BTC/USD"]
     req_id = 13
+    logger.info("Subscribing to trade channel")
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(

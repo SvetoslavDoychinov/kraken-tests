@@ -1,12 +1,15 @@
 import asyncio
 import json
+import logging
 import zlib
-from typing import List, Any
+from typing import List, Any, Union
 
 import pytest
 
 from tests.helpers import recv_until, assert_generic_subscribe_unsubscribe_response, assert_number, RFC3339_UTC_RE
 
+
+logger = logging.getLogger(__name__)
 
 def create_book_subscribe_msg(
     snapshot: bool,
@@ -31,8 +34,9 @@ def create_book_subscribe_msg(
     return msg
 
 
-def assert_book_side_level(level: dict[str, Any], side: str) -> None:
+def assert_book_data(level: dict[str, Any], side: str) -> None:
     """Assert that one book bid or ask level has valid price and quantity fields."""
+    logger.info(f"Asserting book {side} level.")
     assert isinstance(level, dict), (
         f"{side} level must be dict, got {type(level).__name__}"
     )
@@ -52,6 +56,7 @@ def assert_book_snapshot_message(
     depth: int,
 ) -> None:
     """Assert that a Kraken book snapshot has valid schema, depth, ordering, and spread."""
+    logger.info("Asserting book snapshot message.")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
     required_top_level_keys = {
         "channel",
@@ -111,10 +116,9 @@ def assert_book_snapshot_message(
         assert len(asks) == depth, f"expected {depth} asks, got {len(asks)}"
 
         for bid in bids:
-            assert_book_side_level(bid, "bid")
-
+            assert_book_data(bid, "bid")
         for ask in asks:
-            assert_book_side_level(ask, "ask")
+            assert_book_data(ask, "ask")
 
         bid_prices = [bid["price"] for bid in bids]
         ask_prices = [ask["price"] for ask in asks]
@@ -134,7 +138,7 @@ def assert_book_snapshot_message(
         )
 
 
-def _format_checksum_number(value: int | float | str) -> str:
+def _format_checksum_number(value: Union[int, float, str]) -> str:
     """Format a price or quantity value according to Kraken checksum rules."""
     formatted = str(value).replace(".", "").lstrip("0")
     return formatted or "0"
@@ -142,6 +146,7 @@ def _format_checksum_number(value: int | float | str) -> str:
 
 def calculate_book_checksum(book_item: dict[str, Any]) -> int:
     """Calculate the CRC32 checksum for the top 10 ask and bid levels."""
+    logger.info("Calculating book checksum")
     asks = sorted(book_item["asks"], key=lambda level: level["price"])[:10]
     bids = sorted(book_item["bids"], key=lambda level: level["price"], reverse=True)[:10]
 
@@ -165,6 +170,7 @@ async def test_book_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws, dept
     symbol = ["BTC/USD", "ETH/USD"]
     req_id = 3
 
+    logger.info("Sending book subscribe message.")
     await kraken_ws.send(
         json.dumps(
             create_book_subscribe_msg(
@@ -176,6 +182,7 @@ async def test_book_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws, dept
             )
         )
     )
+    logger.info("Validating that book subscribe was successful.")
     for value in symbol:
         subscribe_message = await recv_until(kraken_ws, lambda msg: msg.get("method") == "subscribe", timeout=5.0)
         assert_generic_subscribe_unsubscribe_response(msg=subscribe_message, channel="book", symbol=value,
@@ -187,6 +194,7 @@ async def test_book_subscribe_with_snapshot_sends_valid_snapshot(kraken_ws, dept
 
     deadline = asyncio.get_running_loop().time() + 20.0
 
+    logger.info("Validating that valid snapshots were received.")
     while seen_snapshot_symbols != expected_snapshot_symbols:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
@@ -217,6 +225,7 @@ async def test_book_snapshot_checksum_is_valid(kraken_ws) -> None:
     symbol = ["BTC/USD"]
     depth = 10
 
+    logger.info("Sending book subscribe message.")
     await kraken_ws.send(
         json.dumps(
             create_book_subscribe_msg(
@@ -228,6 +237,7 @@ async def test_book_snapshot_checksum_is_valid(kraken_ws) -> None:
             )
         )
     )
+    logger.info("Validating that book subscribe was successful.")
     await recv_until(kraken_ws, lambda msg: msg.get("method") == "subscribe", timeout=5.0)
     snapshot = await recv_until(
         kraken_ws,
@@ -236,8 +246,10 @@ async def test_book_snapshot_checksum_is_valid(kraken_ws) -> None:
         timeout=10.0,
     )
 
+    logger.info("Validating that valid snapshots are were received.")
     assert_book_snapshot_message(snapshot, symbols=symbol, depth=depth)
     book_item = snapshot["data"][0]
+    logger.info("Validating that the checksum matches the calculated CRC32 value.")
     expected_checksum = calculate_book_checksum(book_item)
     assert book_item["checksum"] == expected_checksum
 
@@ -249,6 +261,7 @@ async def test_book_subscribe_invalid_depth_error(kraken_ws) -> None:
     req_id = 3
     depth = 33
 
+    logger.info("Sending an invalid subscribe message with bad depth.")
     await kraken_ws.send(
         json.dumps(
             create_book_subscribe_msg(
@@ -260,6 +273,7 @@ async def test_book_subscribe_invalid_depth_error(kraken_ws) -> None:
             )
         )
     )
+    logger.info("Validating that book subscribe wasn't successful.")
     error_message = await recv_until(kraken_ws, lambda msg: "error" in msg, timeout=5.0)
 
     assert error_message["error"] == "Subscription depth not supported"

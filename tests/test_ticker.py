@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, List
 
 import pytest
@@ -7,11 +8,14 @@ from tests.helpers import recv_until, create_generic_subscribe_msg, assert_numbe
     assert_generic_subscribe_unsubscribe_response
 
 
+logger = logging.getLogger(__name__)
+
 def assert_ticker_snapshot_message(
     msg: dict[str, Any],
     symbol: str,
 ) -> None:
     """Assert that a Kraken ticker snapshot has valid schema and top-of-book data."""
+    logger.info("Validating that ticker snapshot matches expected schema")
     assert isinstance(msg, dict), f"msg must be dict, got {type(msg).__name__}"
     required_top_level_keys = {
         "channel",
@@ -101,6 +105,7 @@ async def test_ticker_subscribe_with_snapshot_sends_valid_snapshot(
         symbol: List[str]
 ) -> None:
     """Subscribe to the ticker channel and validate the returned snapshot."""
+    logger.info(f"Subscribing to the ticker channel for {symbol} with req_id={req_id}")
     await kraken_ws.send(
         json.dumps(
             create_generic_subscribe_msg(
