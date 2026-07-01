@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+from decimal import Decimal
 from typing import Any, List, Optional
 
 
@@ -15,7 +16,7 @@ async def recv_json(ws, timeout: float = 10.0) -> dict[str, Any]:
     async with asyncio.timeout(timeout):
         raw = await ws.recv()
 
-    return json.loads(raw)
+    return json.loads(raw, parse_float=Decimal)
 
 
 async def recv_until(ws, predicate, timeout: float = 15.0) -> dict[str, Any]:
@@ -65,13 +66,12 @@ def create_generic_unsubscribe_msg(channel: str, symbol: List[str], req_id: int 
     return msg
 
 
-def assert_number(value: Any, field_name: str, positive: bool) -> None:
-    assert isinstance(value, int | float), (
+def assert_number(value: Any, field_name: str, unsigned: bool) -> None:
+    assert isinstance(value, int | float | Decimal), (
         f"{field_name} must be a number, got {type(value).__name__}: {value!r}"
     )
-    assert not isinstance(value, bool), f"{field_name} must be a number, got bool"
 
-    if positive:
+    if unsigned:
         assert value >= 0
 
 

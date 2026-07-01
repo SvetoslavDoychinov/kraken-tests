@@ -95,7 +95,7 @@ def assert_ticker_snapshot_message(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("req_id", [5, 13, None])
 @pytest.mark.parametrize("symbol", [["BTC/USD"], ["ETH/USD"]])
-async def test_ticker_subscribe_with_snapshot_sends_snapshot(
+async def test_ticker_subscribe_with_snapshot_sends_valid_snapshot(
     kraken_ws,
     req_id: int,
     symbol: List[str],
