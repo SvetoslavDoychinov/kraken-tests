@@ -10,4 +10,4 @@ RUN poetry install --no-root --no-interaction --no-ansi
 
 COPY . .
 
-ENTRYPOINT ["poetry", "run", "pytest", "-v", "tests/test_dummy.py"]
+ENTRYPOINT ["poetry", "run", "pytest", "-v", "tests/"]
