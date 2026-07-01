@@ -10,4 +10,4 @@ RUN poetry install --no-root --no-interaction --no-ansi
 
 COPY . .
 
-ENTRYPOINT ["poetry", "run", "pytest", "-v", "tests/"]
+ENTRYPOINT ["poetry", "run", "pytest", "-v", "-ra", "--tb=short", "tests/"]

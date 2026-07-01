@@ -1,0 +1,130 @@
+Kraken WebSocket Test Strategy and Rationale
+============================================
+
+Overview
+--------
+
+This test suite validates selected public Kraken WebSocket v2 channels using live
+integration tests. The tests cover three public channels:
+
+- ticker
+- trade
+- book
+- status
+- heartbeat
+
+The goal is to verify that the WebSocket API can be connected to, subscribed to,
+unsubscribed from, and that key snapshot messages follow the expected structure.
+
+Test Strategy
+-------------
+
+Each test opens a real WebSocket connection, sends a Kraken v2 request, waits
+for the expected message, and validates the result using explicit assertions.
+
+The suite includes tests for:
+
+1. Initial connection status message
+
+   Verifies that Kraken sends a status update after the WebSocket connection is established.
+   This confirms that the handshake completed and the server is reachable.
+
+2. Generic subscribe and unsubscribe behavior
+
+   Validates that public channels accept valid subscribe and unsubscribe requests.
+   The tests check all relevant schema fields.
+
+3. Snapshot behavior
+
+   Validates that channels configured with snapshot=True return a valid snapshot.
+   The ticker, trade, and book snapshots are checked separately because each channel has a different message schema.
+
+4. snapshot=False behavior
+
+   Verifies that subscribing with snapshot=False does not produce an initial snapshot message for the tested channels.
+
+5. Heartbeat behavior
+
+   Verifies that heartbeat messages can be received after subscribing to a public channel.
+   This checks the connection liveness mechanism without assuming that heartbeats stop immediately after unsubscribe.
+
+6. Negative unsubscribe behavior
+
+   Verifies that unsubscribing from a missing subscription returns an error response instead of silently succeeding.
+
+7. Book-specific validation
+
+   The book tests validate depth, bid/ask schema, price ordering, non-crossed top of book, and checksum correctness.
+
+Behaviors and Risks Validated
+-----------------------------
+
+The tests are intended to catch issues such as:
+
+- WebSocket connection or handshake failures
+- Unexpected subscribe or unsubscribe response format
+- Missing required fields in public channel messages
+- Incorrect snapshot behavior
+- Invalid ticker top-of-book data, such as crossed bid/ask prices
+- Invalid book depth or unsupported depth handling
+- Incorrect book ordering, such as bids not descending or asks not ascending
+- Invalid book checksum calculation
+- Missing or malformed timestamps
+- Incorrect handling of optional req_id values
+- Incorrect error handling for invalid unsubscribe requests
+
+Key Assumptions
+---------------
+
+These tests assume that:
+
+- The Kraken public WebSocket v2 endpoint is available at:
+  wss://ws.kraken.com/v2
+
+- The tested public channels do not require authentication.
+
+- Symbols such as BTC/USD and ETH/USD are valid and actively supported.
+
+- snapshot=True should produce an initial snapshot for snapshot-capable channels.
+
+- snapshot=False should not produce an initial snapshot.
+
+- Trade snapshots contain 50 recent trades.
+
+- Book snapshots contain the requested number of price levels on each side.
+
+- Heartbeats may be received after subscribing, but the tests do not assume exact
+  heartbeat timing or that heartbeats stop immediately after unsubscribe.
+
+Design Trade-offs
+-----------------
+
+These are integration tests, not unit tests. This provides higher confidence
+that the code works against the real Kraken WebSocket API, but it also means the
+tests can be affected by external factors such as network issues, Kraken service
+availability, transient HTTP 502 errors, and HTTP 429 rate limiting, etc.
+
+To reduce flakiness, the tests use timeouts when waiting for messages.
+The connection fixture also retries transient connection failures with exponential backoff.
+
+The tests avoid depending on future market activity where possible.
+For example, they do not require ticker or trade update messages to arrive after subscription,
+because live market updates are event-driven and may not occur during a short test window.
+
+Schema validation is implemented with explicit Python assertions instead of an external JSON schema dependency to meet
+the assignment requirements.
+
+Book checksum validation is tested separately from basic book snapshot schema validation.
+This keeps failures easier to diagnose because checksum validation is stricter and depends on exact decimal formatting.
+
+Known Limitations
+-----------------
+
+Because the tests use Kraken's live public WebSocket API, they may occasionally
+fail due to conditions outside the test code, such as:
+
+- Internet connectivity problems
+- Kraken maintenance or degraded service
+- Public API rate limiting
+- Temporary upstream gateway errors
+- Slow or delayed WebSocket messages
